@@ -40,8 +40,7 @@ public class ClientConnectionHandler extends ChannelInboundHandlerAdapter {
          .handler(new ChannelInitializer<SocketChannel>() {
              @Override
              protected void initChannel(SocketChannel ch) {
-                 ch.pipeline().addLast("decoder", new MinecraftDecoder());
-                 ch.pipeline().addLast("encoder", new MinecraftEncoder());
+                 // Pas de décodeurs ici non plus pour rester en mode tunnel pur
                  ch.pipeline().addLast("handler", new BackendConnectionHandler(inboundChannel));
              }
          })

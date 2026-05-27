@@ -21,17 +21,25 @@ bedrock:
   # Since Minecraft: Bedrock Edition uses UDP, this port must allow UDP traffic.
   port: 19132
 
+  # The maximum transmission unit (MTU) for the Bedrock connection.
+  # 1400 is a safe value to avoid packet fragmentation issues (Error 41).
+  mtu: 1400
+
 # Network settings for the Java server connection
 java:
   # The IP address of the Java Edition server.
   address: 127.0.0.1
 
   # The port of the Java Edition server.
-  port: 25566
+  port: 25565
 
   # What type of authentication Bedrock players will be checked against when logging into the Java server.
   # Can be "floodgate" (see https://wiki.geysermc.org/floodgate/), "online", or "offline".
   auth-type: offline
+
+  # The threshold for compression on the Java server.
+  # -1 disables compression, which is often needed for Minestom.
+  compression-threshold: -1
 
   # Whether to forward the hostname that the Bedrock client used to connect over to the Java server.
   # This is designed to be used for forced hosts on proxies.
@@ -227,7 +235,7 @@ advanced:
     # assistance - and use UDP instead of TCP.
     # Disabling Bedrock authentication for other use-cases is NOT SUPPORTED, as it allows anyone to spoof usernames, and is therefore a security risk.
     # All Floodgate functionality (including skin uploading and account linking) will also not work when this option is disabled.
-    validate-bedrock-login: true
+    validate-bedrock-login: false
 
 # bStats is a stat tracker that is entirely anonymous and tracks only basic information
 # about Geyser, such as how many people are online, how many servers are using Geyser,

@@ -1,10 +1,15 @@
-[22:25:15.675 main/INFO] Chargement des extensions...
-[22:25:15.678 main/INFO] 0 extension(s) chargé(s)
-[22:25:16.253 main/INFO] ******************************************
-[22:25:16.253 main/INFO] 
-[22:25:16.253 main/INFO] Chargement Geyser version 2.10.0-b1155 (git-master-13bf67f)
-[22:25:16.253 main/INFO] 
-[22:25:16.253 main/INFO] ******************************************
-[22:25:19.553 GeyserServer-2-1/INFO] Geyser a démarré sur le port UDP 19132
-[22:25:19.560 main/INFO] Terminé (3,307s) ! Exécutez /geyser help pour de l'aide !
-[22:25:19.560 main/WARN] Geyser ne traduit pas parfaitement les mouvements de Bedrock ! Utiliser Geyser sur des serveurs qui ont un anti-triche pourrait vous faire bannir.
+[22:45:54.095 main/INFO] Chargement des extensions...
+[22:45:54.097 main/INFO] 0 extension(s) chargé(s)
+[22:45:54.265 main/INFO] ******************************************
+[22:45:54.265 main/INFO] 
+[22:45:54.265 main/INFO] Chargement Geyser version 2.10.0-b1155 (git-master-13bf67f)
+[22:45:54.265 main/INFO] 
+[22:45:54.265 main/INFO] ******************************************
+[22:45:56.430 main/ERROR] XBOX AUTHENTICATION IS DISABLED ON THIS GEYSER INSTANCE!
+[22:45:56.430 main/ERROR] While this allows using Bedrock edition proxies, it also opens up the ability for hackers to connect with any username they choose.
+[22:45:56.430 main/ERROR] To change this, set "disable-xbox-auth" to "false" in Geyser's config file.
+[22:45:56.482 GeyserServer-2-1/INFO] Geyser a démarré sur le port UDP 19132
+[22:45:56.484 main/INFO] Terminé (2,219s) ! Exécutez /geyser help pour de l'aide !
+[22:45:56.484 main/WARN] Geyser ne traduit pas parfaitement les mouvements de Bedrock ! Utiliser Geyser sur des serveurs qui ont un anti-triche pourrait vous faire bannir.
+[22:47:44.487 GeyserServerChild-4-1/INFO] Joueur connecté avec le nom d'utilisateur Noor (975)
+[22:47:44.495 clientNetworkSession-6-1/INFO] Noor (identifié en tant que: Noor) s'est connecté au serveur java distant sur l'adresse 127.0.0.1

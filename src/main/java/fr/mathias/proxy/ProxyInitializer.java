@@ -1,7 +1,5 @@
 package fr.mathias.proxy;
 
-import fr.mathias.proxy.protocol.MinecraftDecoder;
-import fr.mathias.proxy.protocol.MinecraftEncoder;
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.ChannelPipeline;
 import io.netty.channel.socket.SocketChannel;
@@ -15,11 +13,10 @@ public class ProxyInitializer extends ChannelInitializer<SocketChannel> {
     protected void initChannel(SocketChannel ch) {
         ChannelPipeline pipeline = ch.pipeline();
         
-        // Protocol handling
-        pipeline.addLast("decoder", new MinecraftDecoder());
-        pipeline.addLast("encoder", new MinecraftEncoder());
+        // Mode RAW TUNNEL pour Geyser : On ne touche pas aux paquets
+        // On retire les décodeurs/encodeurs Minecraft qui peuvent corrompre 
+        // les paquets traduits par Geyser.
         
-        // Connection handling
         pipeline.addLast("handler", new ClientConnectionHandler(TARGET_HOST, TARGET_PORT));
     }
 }
