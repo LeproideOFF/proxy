@@ -1,12 +1,10 @@
 package fr.mathias.proxy;
 
 import io.netty.channel.Channel;
-import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
 
 public class BackendConnectionHandler extends ChannelInboundHandlerAdapter {
-
     private final Channel inboundChannel;
 
     public BackendConnectionHandler(Channel inboundChannel) {
@@ -14,29 +12,19 @@ public class BackendConnectionHandler extends ChannelInboundHandlerAdapter {
     }
 
     @Override
-    public void channelActive(ChannelHandlerContext ctx) {
-        ctx.read();
-    }
-
-    @Override
     public void channelRead(ChannelHandlerContext ctx, Object msg) {
-        inboundChannel.writeAndFlush(msg).addListener((ChannelFutureListener) future -> {
-            if (future.isSuccess()) {
-                ctx.channel().read();
-            } else {
-                future.channel().close();
-            }
-        });
+        if (inboundChannel.isActive()) {
+            inboundChannel.writeAndFlush(msg);
+        }
     }
 
     @Override
     public void channelInactive(ChannelHandlerContext ctx) {
-        ClientConnectionHandler.closeOnFlush(inboundChannel);
+        inboundChannel.close();
     }
 
     @Override
     public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
-        cause.printStackTrace();
-        ClientConnectionHandler.closeOnFlush(ctx.channel());
+        inboundChannel.close();
     }
 }

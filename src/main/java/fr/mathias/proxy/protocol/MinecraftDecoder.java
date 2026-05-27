@@ -25,6 +25,14 @@ public class MinecraftDecoder extends ByteToMessageDecoder {
         out.add(in.readRetainedSlice(length));
     }
 
+    public static String readString(ByteBuf buf) {
+        int length = readVarInt(buf);
+        if (length == -1) return "";
+        byte[] bytes = new byte[length];
+        buf.readBytes(bytes);
+        return new String(bytes, java.nio.charset.StandardCharsets.UTF_8);
+    }
+
     public static int readVarInt(ByteBuf buf) {
         int numRead = 0;
         int result = 0;

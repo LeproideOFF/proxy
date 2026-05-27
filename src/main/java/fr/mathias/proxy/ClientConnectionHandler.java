@@ -1,8 +1,8 @@
 package fr.mathias.proxy;
 
-import fr.mathias.proxy.protocol.MinecraftDecoder;
-import fr.mathias.proxy.protocol.MinecraftEncoder;
+import fr.mathias.proxy.config.ProxyConfig;
 import io.netty.bootstrap.Bootstrap;
+import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.*;
 import io.netty.channel.socket.SocketChannel;
@@ -10,107 +10,111 @@ import io.netty.util.ReferenceCountUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.nio.charset.StandardCharsets;
+import java.util.HashMap;
+import java.util.Map;
 
 public class ClientConnectionHandler extends ChannelInboundHandlerAdapter {
-
     private static final Logger LOGGER = LoggerFactory.getLogger(ClientConnectionHandler.class);
+    private static final Map<String, String> PENDING_REDIRECTS = new HashMap<>();
 
-    private final String targetHost;
-    private final int targetPort;
     private Channel outboundChannel;
-    private final List<Object> pendingMessages = new ArrayList<>();
-    private boolean connecting = false;
-
-    public ClientConnectionHandler(String targetHost, int targetPort) {
-        this.targetHost = targetHost;
-        this.targetPort = targetPort;
-    }
+    private String remoteAddress;
 
     @Override
     public void channelActive(ChannelHandlerContext ctx) {
-        final Channel inboundChannel = ctx.channel();
-        LOGGER.info("Nouvelle connexion client: {}", inboundChannel.remoteAddress());
-
-        connecting = true;
-        Bootstrap b = new Bootstrap();
-        b.group(inboundChannel.eventLoop())
-         .channel(inboundChannel.getClass())
-         .handler(new ChannelInitializer<SocketChannel>() {
-             @Override
-             protected void initChannel(SocketChannel ch) {
-                 // Pas de décodeurs ici non plus pour rester en mode tunnel pur
-                 ch.pipeline().addLast("handler", new BackendConnectionHandler(inboundChannel));
-             }
-         })
-         .option(ChannelOption.AUTO_READ, false);
-
-        LOGGER.info("Connexion au serveur backend {}:{}...", targetHost, targetPort);
-        ChannelFuture f = b.connect(targetHost, targetPort);
-        outboundChannel = f.channel();
+        String fullAddress = ctx.channel().remoteAddress().toString();
+        // Nettoyage de l'IP (ex: /127.0.0.1:12345 -> 127.0.0.1)
+        this.remoteAddress = fullAddress.split(":")[0].replace("/", "");
         
-        f.addListener((ChannelFutureListener) future -> {
+        String target = PENDING_REDIRECTS.getOrDefault(remoteAddress, ProxyConfig.DEFAULT_SERVER);
+        LOGGER.info("Client {} connecté. Direction : {}", remoteAddress, target);
+        connectTo(ctx, target);
+    }
+
+    public void connectTo(ChannelHandlerContext ctx, String serverName) {
+        ProxyConfig.BackendServer server = ProxyConfig.SERVERS.get(serverName);
+        if (server == null) {
+            ctx.close();
+            return;
+        }
+
+        Bootstrap b = new Bootstrap();
+        b.group(ctx.channel().eventLoop())
+         .channel(ctx.channel().getClass())
+         .handler(new BackendConnectionHandler(ctx.channel()))
+         .option(ChannelOption.AUTO_READ, true);
+
+        b.connect(server.host(), server.port()).addListener((ChannelFutureListener) future -> {
             if (future.isSuccess()) {
-                LOGGER.info("Connecté au backend avec succès.");
-                connecting = false;
-                // Envoyer les messages en attente
-                for (Object msg : pendingMessages) {
-                    outboundChannel.writeAndFlush(msg);
-                }
-                pendingMessages.clear();
-                inboundChannel.read();
+                outboundChannel = future.channel();
+                LOGGER.info("Tunnel établi vers {}", serverName);
             } else {
-                LOGGER.error("Échec de connexion au backend: {}", future.cause().getMessage());
-                for (Object msg : pendingMessages) {
-                    ReferenceCountUtil.release(msg);
-                }
-                pendingMessages.clear();
-                inboundChannel.close();
+                LOGGER.error("Impossible de joindre {}", serverName);
+                ctx.close();
             }
         });
     }
 
     @Override
     public void channelRead(ChannelHandlerContext ctx, Object msg) {
-        if (outboundChannel != null && outboundChannel.isActive() && !connecting) {
-            outboundChannel.writeAndFlush(msg).addListener((ChannelFutureListener) future -> {
-                if (future.isSuccess()) {
-                    ctx.channel().read();
-                } else {
-                    LOGGER.error("Erreur d'écriture vers le backend.");
-                    future.channel().close();
+        if (msg instanceof ByteBuf buf) {
+            // Scan d'octets robuste pour "server"
+            buf.markReaderIndex();
+            byte[] pattern = "server".getBytes(StandardCharsets.UTF_8);
+            int matchIndex = -1;
+            for (int i = 0; i <= buf.readableBytes() - pattern.length; i++) {
+                boolean match = true;
+                for (int j = 0; j < pattern.length; j++) {
+                    if (buf.getByte(buf.readerIndex() + i + j) != pattern[j]) {
+                        match = false;
+                        break;
+                    }
                 }
-            });
-        } else if (connecting) {
-            // Bufferiser le message pendant la connexion
-            pendingMessages.add(msg);
+                if (match) { matchIndex = i; break; }
+            }
+
+            if (matchIndex != -1) {
+                buf.skipBytes(matchIndex);
+                String content = buf.toString(StandardCharsets.UTF_8);
+                LOGGER.info("Commande détectée : {}", content);
+                
+                String[] parts = content.split(" ");
+                for (int i = 0; i < parts.length; i++) {
+                    if (parts[i].contains("server") && i + 1 < parts.length) {
+                        String target = parts[i+1].replaceAll("[^a-zA-Z0-9.-]", "");
+                        if (ProxyConfig.SERVERS.containsKey(target)) {
+                            PENDING_REDIRECTS.put(remoteAddress, target);
+                            LOGGER.info("REDirection mémorisée pour {} -> {}", remoteAddress, target);
+                            
+                            // Message de déco propre
+                            String kickMsg = "§aRedirection vers " + target + "...\n§7Relance ta connexion pour confirmer !";
+                            ctx.writeAndFlush(Unpooled.copiedBuffer(kickMsg, StandardCharsets.UTF_8))
+                               .addListener(ChannelFutureListener.CLOSE);
+                            
+                            ReferenceCountUtil.release(msg);
+                            return;
+                        }
+                    }
+                }
+            }
+            buf.resetReaderIndex();
+        }
+
+        if (outboundChannel != null && outboundChannel.isActive()) {
+            outboundChannel.writeAndFlush(msg);
         } else {
-            LOGGER.warn("Message reçu mais pas de backend actif.");
             ReferenceCountUtil.release(msg);
         }
     }
 
     @Override
     public void channelInactive(ChannelHandlerContext ctx) {
-        if (outboundChannel != null) {
-            closeOnFlush(outboundChannel);
-        }
-        for (Object msg : pendingMessages) {
-            ReferenceCountUtil.release(msg);
-        }
-        pendingMessages.clear();
+        if (outboundChannel != null) outboundChannel.close();
     }
 
     @Override
     public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
-        LOGGER.error("Client connection error", cause);
-        closeOnFlush(ctx.channel());
-    }
-
-    static void closeOnFlush(Channel ch) {
-        if (ch.isActive()) {
-            ch.writeAndFlush(Unpooled.EMPTY_BUFFER).addListener(ChannelFutureListener.CLOSE);
-        }
+        ctx.close();
     }
 }
