@@ -19,7 +19,7 @@ public class ProxyServer {
     // 1 boss thread, 1 worker thread is enough for 2 players.
     private static final int BOSS_THREADS = 1;
     private static final int WORKER_THREADS = 1;
-    private static final int PORT = 25565;
+    private static final int PORT = 25566;
 
     public static void main(String[] args) throws Exception {
         LOGGER.info("Démarrage de UltraProxy...");
