@@ -8,17 +8,21 @@ version = '1.0-SNAPSHOT'
 
 repositories {
     mavenCentral()
+    maven { url 'https://repo.opencollab.dev/main/' }
 }
 
 dependencies {
     // Netty for high-performance networking
     implementation 'io.netty:netty-all:4.1.108.Final'
     
-    // Fast JSON parsing (Gson or Jackson, minimal is better, let's use Gson for simplicity)
+    // Fast JSON parsing
     implementation 'com.google.code.gson:gson:2.10.1'
     
-    // Logging (SLF4J + minimal simple logger to save memory compared to Logback)
+    // Logging
     implementation 'org.slf4j:slf4j-simple:2.0.12'
+
+    // Geyser API and Entrypoint
+    compileOnly 'org.geysermc.geyser:api:2.4.2-SNAPSHOT'
 }
 
 application {

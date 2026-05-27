@@ -26,6 +26,9 @@ public class ProxyServer {
         
         // Plugin Loading would go here
         PluginManager.init();
+        
+        // Setup Geyser
+        GeyserManager.setup();
 
         boolean useEpoll = Epoll.isAvailable();
         EventLoopGroup bossGroup = useEpoll ? new EpollEventLoopGroup(BOSS_THREADS) : new NioEventLoopGroup(BOSS_THREADS);
