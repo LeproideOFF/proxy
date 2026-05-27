@@ -21,6 +21,31 @@ public class ProxyServer {
     private static final int WORKER_THREADS = 1;
     private static final int PORT = 25566;
 
+    private static void startMemoryMonitoring() {
+        Thread monitorThread = new Thread(() -> {
+            while (true) {
+                try {
+                    Runtime runtime = Runtime.getRuntime();
+                    long maxMemory = runtime.maxMemory() / 1024 / 1024;
+                    long allocatedMemory = runtime.totalMemory() / 1024 / 1024;
+                    long freeMemory = runtime.freeMemory() / 1024 / 1024;
+                    long usedMemory = allocatedMemory - freeMemory;
+
+                    LOGGER.info("--- MONITORING RAM ---");
+                    LOGGER.info("Utilisée: {} Mo | Allouée: {} Mo | Max: {} Mo", usedMemory, allocatedMemory, maxMemory);
+                    LOGGER.info("----------------------");
+
+                    Thread.sleep(10000); // Toutes les 10 secondes
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    break;
+                }
+            }
+        }, "RAM-Monitor");
+        monitorThread.setDaemon(true);
+        monitorThread.start();
+    }
+
     public static void main(String[] args) throws Exception {
         LOGGER.info("Démarrage de UltraProxy...");
         
