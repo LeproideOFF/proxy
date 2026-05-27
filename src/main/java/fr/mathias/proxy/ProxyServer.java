@@ -24,6 +24,9 @@ public class ProxyServer {
     public static void main(String[] args) throws Exception {
         LOGGER.info("Démarrage de UltraProxy...");
         
+        // Démarrage du monitoring RAM (toutes les 10 secondes)
+        startMemoryMonitoring();
+        
         // Plugin Loading would go here
         PluginManager.init();
         
