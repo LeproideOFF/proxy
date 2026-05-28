@@ -1,13 +1,13 @@
-[23:34:14.122 main/INFO] Chargement des extensions...
-[23:34:14.125 main/INFO] 0 extension(s) chargé(s)
-[23:34:14.300 main/INFO] ******************************************
-[23:34:14.301 main/INFO] 
-[23:34:14.301 main/INFO] Chargement Geyser version 2.10.0-b1155 (git-master-13bf67f)
-[23:34:14.301 main/INFO] 
-[23:34:14.301 main/INFO] ******************************************
-[23:34:16.443 main/ERROR] XBOX AUTHENTICATION IS DISABLED ON THIS GEYSER INSTANCE!
-[23:34:16.443 main/ERROR] While this allows using Bedrock edition proxies, it also opens up the ability for hackers to connect with any username they choose.
-[23:34:16.443 main/ERROR] To change this, set "disable-xbox-auth" to "false" in Geyser's config file.
-[23:34:16.497 GeyserServer-2-1/INFO] Geyser a démarré sur le port UDP 19132
-[23:34:16.541 main/INFO] Terminé (2,241s) ! Exécutez /geyser help pour de l'aide !
-[23:34:16.541 main/WARN] Geyser ne traduit pas parfaitement les mouvements de Bedrock ! Utiliser Geyser sur des serveurs qui ont un anti-triche pourrait vous faire bannir.
+[19:27:52.427 main/INFO] Chargement des extensions...
+[19:27:52.430 main/INFO] 0 extension(s) chargé(s)
+[19:27:52.665 main/INFO] ******************************************
+[19:27:52.665 main/INFO] 
+[19:27:52.665 main/INFO] Chargement Geyser version 2.10.0-b1155 (git-master-13bf67f)
+[19:27:52.665 main/INFO] 
+[19:27:52.665 main/INFO] ******************************************
+[19:27:54.970 main/ERROR] XBOX AUTHENTICATION IS DISABLED ON THIS GEYSER INSTANCE!
+[19:27:54.970 main/ERROR] While this allows using Bedrock edition proxies, it also opens up the ability for hackers to connect with any username they choose.
+[19:27:54.970 main/ERROR] To change this, set "disable-xbox-auth" to "false" in Geyser's config file.
+[19:27:55.024 GeyserServer-2-1/INFO] Geyser a démarré sur le port UDP 19132
+[19:27:55.025 main/INFO] Terminé (2,36s) ! Exécutez /geyser help pour de l'aide !
+[19:27:55.025 main/WARN] Geyser ne traduit pas parfaitement les mouvements de Bedrock ! Utiliser Geyser sur des serveurs qui ont un anti-triche pourrait vous faire bannir.
