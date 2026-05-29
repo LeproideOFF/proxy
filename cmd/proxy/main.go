@@ -53,7 +53,6 @@ func handleConnection(clientConn net.Conn) {
 	defer backendConn.Close()
 
 	var state int = Handshaking
-	var protocolVersion int
 
 	var wg sync.WaitGroup
 	wg.Add(2)
@@ -69,7 +68,7 @@ func handleConnection(clientConn net.Conn) {
 			}
 
 			if state == Handshaking && id == 0x00 {
-				state, protocolVersion = handleHandshake(data)
+				state, _ = handleHandshake(data)
 			} else if state == Play && (id == 0x03 || id == 0x04) { // Chat ou Command
 				if interceptCommand(data, clientConn) {
 					continue
