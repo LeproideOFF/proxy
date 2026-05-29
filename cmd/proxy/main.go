@@ -113,7 +113,9 @@ func interceptCommand(data []byte, client net.Conn) bool {
 	buf := bytes.NewBuffer(data)
 	msg := readString(buf)
 
-	if msg == "/server" {
+	log.Printf("[Interception] Commande reçue : %s", msg)
+
+	if msg == "/server" || msg == "/server " {
 		sendSystemMessage(client, "§a[Proxy] §fServeur: §bPrincipal §7(Port 25565)")
 		sendSystemMessage(client, "§a[Proxy] §fJoueurs: §e500+ possible §7(Go-Optimized)")
 		return true
@@ -123,14 +125,40 @@ func interceptCommand(data []byte, client net.Conn) bool {
 
 // injectCommandPrediction ajoute "/server" dans l'arbre des commandes du client
 func injectCommandPrediction(data []byte) []byte {
-	// Structure simplifiée du paquet Declare Commands:
-	// VarInt Count | Nodes... | VarInt RootIndex
-	// On va juste ajouter notre noeud à la fin et modifier le RootIndex ou l'arbre
+	buf := bytes.NewBuffer(data)
+	count, _ := readVarInt(buf)
 	
-	// NOTE: Pour un proxy "basic", on peut aussi répondre aux requêtes de Tab-Complete
-	// Mais injecter dans l'arbre est plus propre pour le UI moderne.
-	// Pour l'instant, on laisse passer le paquet original mais on prépare le buffer.
-	return data 
+	// Si le paquet est trop petit ou bizarre, on ne touche à rien
+	if count <= 0 || count > 10000 {
+		return data
+	}
+
+	// On va reconstruire le paquet en ajoutant notre nœud
+	newPayload := new(bytes.Buffer)
+	
+	// On garde le même nombre de nœuds + 1
+	writeVarInt(newPayload, count+1)
+	
+	// On copie les nœuds existants
+	// NOTE: Pour faire ça proprement sans parser chaque nœud (complexe),
+	// on va ruser en ajoutant le nœud à la fin et en modifiant la racine.
+	// Mais le plus simple pour un proxy basique est d'attendre l'index de la racine.
+	
+	// On va plutôt utiliser une approche simplifiée :
+	// On rajoute un nœud "literal" à la fin qui s'appelle "server".
+	
+	newPayload.Write(buf.Bytes()) // On écrit le reste du buffer original (nœuds + rootIndex)
+	
+	// On ajoute notre nœud à la fin (Literal, Name: server)
+	// Flags: 0x01 (Literal)
+	newPayload.WriteByte(0x01)
+	writeVarInt(newPayload, 0) // Pas d'enfants
+	writeString(newPayload, "server")
+	
+	// NOTE: Cette méthode "sale" peut décaler l'index de la racine.
+	// Pour que ce soit parfait, il faut parser le graphe.
+	// On va rester sur l'interception simple pour l'instant mais améliorer le retour visuel.
+	return data
 }
 
 func sendSystemMessage(client net.Conn, text string) {
