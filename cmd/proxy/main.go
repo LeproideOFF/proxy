@@ -15,7 +15,6 @@ const (
 	BackendAddr = "127.0.0.1:25565"
 )
 
-// Minecraft States
 const (
 	Handshaking = 0
 	Status      = 1
@@ -26,11 +25,11 @@ const (
 func main() {
 	listener, err := net.Listen("tcp", ListenAddr)
 	if err != nil {
-		log.Fatalf("Failed to listen: %v", err)
+		log.Fatalf("Fail: %v", err)
 	}
 	defer listener.Close()
 
-	log.Printf("[Proxy] Java Proxy listening on %s", ListenAddr)
+	log.Printf("Proxy 775 active on %s", ListenAddr)
 	go startUDPProxy()
 
 	for {
@@ -47,17 +46,14 @@ func handleConnection(clientConn net.Conn) {
 
 	backendConn, err := net.Dial("tcp", BackendAddr)
 	if err != nil {
-		log.Printf("Backend offline: %v", err)
 		return
 	}
 	defer backendConn.Close()
 
 	var state int = Handshaking
-
 	var wg sync.WaitGroup
 	wg.Add(2)
 
-	// Client -> Backend (Interception des commandes envoyées)
 	go func() {
 		defer wg.Done()
 		defer backendConn.Close()
@@ -69,16 +65,17 @@ func handleConnection(clientConn net.Conn) {
 
 			if state == Handshaking && id == 0x00 {
 				state, _ = handleHandshake(data)
-			} else if state == Play && (id == 0x03 || id == 0x04) { // Chat ou Command
-				if interceptCommand(data, clientConn) {
-					continue
+			} else if state == Play {
+				if id == 0x04 || id == 0x03 {
+					if interceptCommand(data, clientConn) {
+						continue
+					}
 				}
 			}
 			writeRawPacket(backendConn, id, data)
 		}
 	}()
 
-	// Backend -> Client (Injection de l'auto-complétion)
 	go func() {
 		defer wg.Done()
 		defer clientConn.Close()
@@ -87,12 +84,9 @@ func handleConnection(clientConn net.Conn) {
 			if err != nil {
 				return
 			}
-
-			// Intercepter Declare Commands (souvent 0x11 ou 0x12 en 1.13+)
-			if state == Play && (id == 0x11 || id == 0x12) {
-				data = injectCommandPrediction(data)
+			if state == Play && (id == 0x11 || id == 0x12 || id == 0x13) {
+				data = injectCommand(data)
 			}
-
 			writeRawPacket(clientConn, id, data)
 		}
 	}()
@@ -109,68 +103,52 @@ func handleHandshake(data []byte) (int, int) {
 	return nextState, version
 }
 
+func injectCommand(data []byte) []byte {
+	buf := bytes.NewBuffer(data)
+	count, err := readVarInt(buf)
+	if err != nil || count <= 0 {
+		return data
+	}
+
+	res := new(bytes.Buffer)
+	writeVarInt(res, count+1)
+	
+	nodesData := buf.Bytes()
+	if len(nodesData) < 1 {
+		return data
+	}
+	
+	rootIndex := nodesData[len(nodesData)-1]
+	res.Write(nodesData[:len(nodesData)-1])
+
+	res.WriteByte(0x01)
+	writeVarInt(res, 0)
+	writeString(res, "server")
+	
+	res.WriteByte(rootIndex)
+	
+	return res.Bytes()
+}
+
 func interceptCommand(data []byte, client net.Conn) bool {
 	buf := bytes.NewBuffer(data)
 	msg := readString(buf)
 
-	log.Printf("[Interception] Commande reçue : %s", msg)
-
-	if msg == "/server" || msg == "/server " {
-		sendSystemMessage(client, "§a[Proxy] §fServeur: §bPrincipal §7(Port 25565)")
-		sendSystemMessage(client, "§a[Proxy] §fJoueurs: §e500+ possible §7(Go-Optimized)")
+	if msg == "server" || msg == "/server" || msg == "server " || msg == "/server " {
+		sendSystemMessage(client, "§a[Proxy] §fServeur Principal §7(Protocol 775)")
 		return true
 	}
 	return false
-}
-
-// injectCommandPrediction ajoute "/server" dans l'arbre des commandes du client
-func injectCommandPrediction(data []byte) []byte {
-	buf := bytes.NewBuffer(data)
-	count, _ := readVarInt(buf)
-	
-	// Si le paquet est trop petit ou bizarre, on ne touche à rien
-	if count <= 0 || count > 10000 {
-		return data
-	}
-
-	// On va reconstruire le paquet en ajoutant notre nœud
-	newPayload := new(bytes.Buffer)
-	
-	// On garde le même nombre de nœuds + 1
-	writeVarInt(newPayload, count+1)
-	
-	// On copie les nœuds existants
-	// NOTE: Pour faire ça proprement sans parser chaque nœud (complexe),
-	// on va ruser en ajoutant le nœud à la fin et en modifiant la racine.
-	// Mais le plus simple pour un proxy basique est d'attendre l'index de la racine.
-	
-	// On va plutôt utiliser une approche simplifiée :
-	// On rajoute un nœud "literal" à la fin qui s'appelle "server".
-	
-	newPayload.Write(buf.Bytes()) // On écrit le reste du buffer original (nœuds + rootIndex)
-	
-	// On ajoute notre nœud à la fin (Literal, Name: server)
-	// Flags: 0x01 (Literal)
-	newPayload.WriteByte(0x01)
-	writeVarInt(newPayload, 0) // Pas d'enfants
-	writeString(newPayload, "server")
-	
-	// NOTE: Cette méthode "sale" peut décaler l'index de la racine.
-	// Pour que ce soit parfait, il faut parser le graphe.
-	// On va rester sur l'interception simple pour l'instant mais améliorer le retour visuel.
-	return data
 }
 
 func sendSystemMessage(client net.Conn, text string) {
 	msgJson := fmt.Sprintf(`{"text":"%s"}`, text)
 	payload := new(bytes.Buffer)
 	writeString(payload, msgJson)
-	payload.WriteByte(0) // Position
-	payload.Write(make([]byte, 16)) // UUID
+	payload.WriteByte(0)
+	payload.Write(make([]byte, 16))
 	writeRawPacket(client, 0x0F, payload.Bytes())
 }
-
-// --- Protocol Helpers ---
 
 func readPacket(r io.Reader) ([]byte, int, error) {
 	length, err := readVarInt(r)
@@ -206,7 +184,7 @@ func readVarInt(r io.Reader) (int, error) {
 			return v, nil
 		}
 	}
-	return 0, errors.New("VarInt too big")
+	return 0, errors.New("err")
 }
 
 func writeVarInt(w io.Writer, v int) {
