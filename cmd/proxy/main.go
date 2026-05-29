@@ -2,7 +2,7 @@ package main
 
 import (
 	"bytes"
-	"errors"
+	"compress/zlib"
 	"fmt"
 	"io"
 	"log"
@@ -15,161 +15,166 @@ const (
 	BackendAddr = "127.0.0.1:25565"
 )
 
-const (
-	Handshaking = 0
-	Status      = 1
-	Login       = 2
-	Play        = 3
-)
-
 func main() {
-	listener, err := net.Listen("tcp", ListenAddr)
+	l, err := net.Listen("tcp", ListenAddr)
 	if err != nil {
 		log.Fatalf("Fail: %v", err)
 	}
-	defer listener.Close()
-
-	log.Printf("Proxy 775 active on %s", ListenAddr)
-	go startUDPProxy()
-
+	defer l.Close()
+	log.Printf("Proxy active on %s", ListenAddr)
 	for {
-		conn, err := listener.Accept()
+		c, err := l.Accept()
 		if err != nil {
 			continue
 		}
-		go handleConnection(conn)
+		go handle(c)
 	}
 }
 
-func handleConnection(clientConn net.Conn) {
-	defer clientConn.Close()
+type session struct {
+	client      net.Conn
+	backend     net.Conn
+	compThreshold int
+	state       int
+}
 
-	backendConn, err := net.Dial("tcp", BackendAddr)
+func handle(c net.Conn) {
+	defer c.Close()
+	b, err := net.Dial("tcp", BackendAddr)
 	if err != nil {
 		return
 	}
-	defer backendConn.Close()
-
-	var state int = Handshaking
+	defer b.Close()
+	s := &session{client: c, backend: b, compThreshold: -1, state: 0}
 	var wg sync.WaitGroup
 	wg.Add(2)
-
 	go func() {
 		defer wg.Done()
-		defer backendConn.Close()
 		for {
-			data, id, err := readPacket(clientConn)
+			id, data, err := s.readPacket(s.client)
 			if err != nil {
 				return
 			}
-
-			if state == Handshaking && id == 0x00 {
-				state, _ = handleHandshake(data)
-			} else if state == Play {
+			if s.state == 0 && id == 0x00 {
+				s.handleHandshake(data)
+			} else if s.state >= 3 {
 				if id == 0x04 || id == 0x03 {
-					if interceptCommand(data, clientConn) {
+					if s.handleCommand(data) {
 						continue
 					}
 				}
 			}
-			writeRawPacket(backendConn, id, data)
+			s.writePacket(s.backend, id, data)
 		}
 	}()
-
 	go func() {
 		defer wg.Done()
-		defer clientConn.Close()
 		for {
-			data, id, err := readPacket(backendConn)
+			id, data, err := s.readPacket(s.backend)
 			if err != nil {
 				return
 			}
-			if state == Play && (id == 0x11 || id == 0x12 || id == 0x13) {
-				data = injectCommand(data)
+			if s.state == 2 {
+				if id == 0x03 {
+					s.handleSetCompression(data)
+				} else if id == 0x02 {
+					s.state = 3
+				}
+			} else if s.state == 3 {
+				if id == 0x02 {
+					s.state = 4
+				}
 			}
-			writeRawPacket(clientConn, id, data)
+			s.writePacket(s.client, id, data)
 		}
 	}()
-
 	wg.Wait()
 }
 
-func handleHandshake(data []byte) (int, int) {
+func (s *session) readPacket(r io.Reader) (int, []byte, error) {
+	length, err := readVarInt(r)
+	if err != nil {
+		return 0, nil, err
+	}
+	data := make([]byte, length)
+	if _, err := io.ReadFull(r, data); err != nil {
+		return 0, nil, err
+	}
+	if s.compThreshold >= 0 {
+		buf := bytes.NewBuffer(data)
+		uncompressedLen, _ := readVarInt(buf)
+		if uncompressedLen > 0 {
+			zr, err := zlib.NewReader(buf)
+			if err != nil {
+				return 0, nil, err
+			}
+			data = make([]byte, uncompressedLen)
+			io.ReadFull(zr, data)
+			zr.Close()
+		} else {
+			data = buf.Bytes()
+		}
+	}
 	buf := bytes.NewBuffer(data)
-	version, _ := readVarInt(buf)
+	id, _ := readVarInt(buf)
+	return id, buf.Bytes(), nil
+}
+
+func (s *session) writePacket(w io.Writer, id int, data []byte) {
+	pk := new(bytes.Buffer)
+	writeVarInt(pk, id)
+	pk.Write(data)
+	raw := pk.Bytes()
+	if s.compThreshold >= 0 {
+		var b bytes.Buffer
+		if len(raw) >= s.compThreshold {
+			writeVarInt(&b, len(raw))
+			zw := zlib.NewWriter(&b)
+			zw.Write(raw)
+			zw.Close()
+		} else {
+			writeVarInt(&b, 0)
+			b.Write(raw)
+		}
+		raw = b.Bytes()
+	}
+	writeVarInt(w, len(raw))
+	w.Write(raw)
+}
+
+func (s *session) handleHandshake(data []byte) {
+	buf := bytes.NewBuffer(data)
+	readVarInt(buf)
 	readString(buf)
-	binaryReadUint16(buf)
-	nextState, _ := readVarInt(buf)
-	return nextState, version
+	var b [2]byte
+	io.ReadFull(buf, b[:])
+	st, _ := readVarInt(buf)
+	s.state = st
 }
 
-func injectCommand(data []byte) []byte {
+func (s *session) handleSetCompression(data []byte) {
 	buf := bytes.NewBuffer(data)
-	count, err := readVarInt(buf)
-	if err != nil || count <= 0 {
-		return data
-	}
-
-	res := new(bytes.Buffer)
-	writeVarInt(res, count+1)
-	
-	nodesData := buf.Bytes()
-	if len(nodesData) < 1 {
-		return data
-	}
-	
-	rootIndex := nodesData[len(nodesData)-1]
-	res.Write(nodesData[:len(nodesData)-1])
-
-	res.WriteByte(0x01)
-	writeVarInt(res, 0)
-	writeString(res, "server")
-	
-	res.WriteByte(rootIndex)
-	
-	return res.Bytes()
+	v, _ := readVarInt(buf)
+	s.compThreshold = v
 }
 
-func interceptCommand(data []byte, client net.Conn) bool {
+func (s *session) handleCommand(data []byte) bool {
 	buf := bytes.NewBuffer(data)
-	msg := readString(buf)
-
-	if msg == "server" || msg == "/server" || msg == "server " || msg == "/server " {
-		sendSystemMessage(client, "§a[Proxy] §fServeur Principal §7(Protocol 775)")
+	cmd := readString(buf)
+	if cmd == "server" || cmd == "/server" {
+		s.sendMessage("§a[Proxy] §fOK")
 		return true
 	}
 	return false
 }
 
-func sendSystemMessage(client net.Conn, text string) {
-	msgJson := fmt.Sprintf(`{"text":"%s"}`, text)
-	payload := new(bytes.Buffer)
-	writeString(payload, msgJson)
-	payload.WriteByte(0)
-	payload.Write(make([]byte, 16))
-	writeRawPacket(client, 0x0F, payload.Bytes())
-}
-
-func readPacket(r io.Reader) ([]byte, int, error) {
-	length, err := readVarInt(r)
-	if err != nil {
-		return nil, 0, err
-	}
-	packetData := make([]byte, length)
-	if _, err := io.ReadFull(r, packetData); err != nil {
-		return nil, 0, err
-	}
-	buf := bytes.NewBuffer(packetData)
-	id, _ := readVarInt(buf)
-	return buf.Bytes(), id, nil
-}
-
-func writeRawPacket(w io.Writer, id int, data []byte) {
-	idBuf := new(bytes.Buffer)
-	writeVarInt(idBuf, id)
-	writeVarInt(w, idBuf.Len()+len(data))
-	w.Write(idBuf.Bytes())
-	w.Write(data)
+func (s *session) sendMessage(txt string) {
+	msg := fmt.Sprintf(`{"text":"%s"}`, txt)
+	pk := new(bytes.Buffer)
+	writeString(pk, msg)
+	pk.WriteByte(0)
+	pk.Write(make([]byte, 16))
+	s.writePacket(s.client, 0x67, pk.Bytes())
 }
 
 func readVarInt(r io.Reader) (int, error) {
@@ -184,7 +189,7 @@ func readVarInt(r io.Reader) (int, error) {
 			return v, nil
 		}
 	}
-	return 0, errors.New("err")
+	return 0, fmt.Errorf("err")
 }
 
 func writeVarInt(w io.Writer, v int) {
@@ -197,6 +202,9 @@ func writeVarInt(w io.Writer, v int) {
 
 func readString(r io.Reader) string {
 	l, _ := readVarInt(r)
+	if l < 0 || l > 32767 {
+		return ""
+	}
 	s := make([]byte, l)
 	io.ReadFull(r, s)
 	return string(s)
@@ -205,39 +213,4 @@ func readString(r io.Reader) string {
 func writeString(w io.Writer, s string) {
 	writeVarInt(w, len(s))
 	w.Write([]byte(s))
-}
-
-func binaryReadUint16(r io.Reader) uint16 {
-	var b [2]byte
-	r.Read(b[:])
-	return uint16(b[0])<<8 | uint16(b[1])
-}
-
-func startUDPProxy() {
-	addr, _ := net.ResolveUDPAddr("udp", ListenAddr)
-	conn, _ := net.ListenUDP("udp", addr)
-	bAddr, _ := net.ResolveUDPAddr("udp", BackendAddr)
-	clients := make(map[string]*net.UDPConn)
-	var mu sync.Mutex
-	buf := make([]byte, 2048)
-	for {
-		n, cAddr, _ := conn.ReadFromUDP(buf)
-		s := cAddr.String()
-		mu.Lock()
-		cb, ok := clients[s]
-		if !ok {
-			cb, _ = net.DialUDP("udp", nil, bAddr)
-			clients[s] = cb
-			go func(c *net.UDPConn, a *net.UDPAddr) {
-				b := make([]byte, 2048)
-				for {
-					bn, _, err := c.ReadFromUDP(b)
-					if err != nil { break }
-					conn.WriteToUDP(b[:bn], a)
-				}
-			}(cb, cAddr)
-		}
-		mu.Unlock()
-		cb.Write(buf[:n])
-	}
 }
