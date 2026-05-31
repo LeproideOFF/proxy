@@ -13,7 +13,7 @@ motd = "<#09add3>A Velocity Server"
 show-max-players = 500
 
 # Should we authenticate players with Mojang? By default, this is on.
-online-mode = true
+online-mode = false
 
 # Should the proxy enforce the new public key security standard? By default, this is on.
 force-key-authentication = true
@@ -90,25 +90,27 @@ decompressed-bytes-per-second = 5242880
 [servers]
 # Configure your servers here. Each key represents the server's name, and the value
 # represents the IP address of the server to connect to.
-lobby = "127.0.0.1:30066"
-factions = "127.0.0.1:30067"
-minigames = "127.0.0.1:30068"
+auth = "127.0.0.1:25500"
+lobby1 = "127.0.0.1:25570"
+lobby2 = "127.0.0.1:25571"
+lobby3 = "127.0.0.1:25572"
+lobby4 = "127.0.0.1:25573"
+lobby5 = "127.0.0.1:25574"
 
 # In what order we should try servers when a player logs in or is kicked from a server.
 try = [
-    "lobby"
+    "auth",
+    "lobby1",
+    "lobby2",
+    "lobby3",
+    "lobby4",
+    "lobby5"
 ]
 
 [forced-hosts]
 # Configure your forced hosts here.
 "lobby.example.com" = [
-    "lobby"
-]
-"factions.example.com" = [
-    "factions"
-]
-"minigames.example.com" = [
-    "minigames"
+    "auth"
 ]
 
 [advanced]
