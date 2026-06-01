@@ -96,15 +96,11 @@ lobby2 = "127.0.0.1:25571"
 lobby3 = "127.0.0.1:25572"
 lobby4 = "127.0.0.1:25573"
 lobby5 = "127.0.0.1:25574"
+survie = "127.0.0.1:25574"
 
 # In what order we should try servers when a player logs in or is kicked from a server.
 try = [
-    "auth",
-    "lobby1",
-    "lobby2",
-    "lobby3",
-    "lobby4",
-    "lobby5"
+    "auth"
 ]
 
 [forced-hosts]

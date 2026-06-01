@@ -78,6 +78,7 @@ velocity-servers:
   lobby5: 775
   lobby3: 775
   lobby2: 775
+  survie: 775
 #
 #----------------------------------------------------------#
 #                  GLOBAL PACKET LIMITER                   #
