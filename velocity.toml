@@ -90,13 +90,13 @@ decompressed-bytes-per-second = 5242880
 [servers]
 # Configure your servers here. Each key represents the server's name, and the value
 # represents the IP address of the server to connect to.
-auth = "127.0.0.1:25500"
-lobby1 = "127.0.0.1:25570"
-lobby2 = "127.0.0.1:25571"
-lobby3 = "127.0.0.1:25572"
-lobby4 = "127.0.0.1:25573"
-lobby5 = "127.0.0.1:25574"
-survie = "192.168.1.86:25565"
+auth = "192.168.1.73:25500"
+lobby1 = "192.168.1.7325570"
+lobby2 = "192.168.1.73:25571"
+lobby3 = "192.168.1.73:25572"
+lobby4 = "192.168.1.73:25573"
+lobby5 = "192.168.1.73:25574"
+survie = "127.0.0.1:25566"
 
 # In what order we should try servers when a player logs in or is kicked from a server.
 try = [
